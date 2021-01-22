@@ -51,17 +51,19 @@ pub fn parse(p: Vec<u8>) -> Result<Vec<Command>, Error> {
       }
       b']' => {
         let len = program.len();
+        let mut pair_index: usize = 0;
         match jump_stack.pop() {
           Some(i) => {
             if let Command::JumpForward(j)  = &mut program[i] {
               j.pair_index = len;
+              pair_index = j.index;
             }
             program.push(
               Command::JumpBackward(
                 // Set index of where we are in the program
                 Jump {
-                  index: program.len()-1,
-                  pair_index: len,
+                  index: len,
+                  pair_index,
                 }
               )
             );

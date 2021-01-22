@@ -60,11 +60,11 @@ impl ProgramStack {
           }
         }
         Command::IncrementValue => {
-          if self.tape_index < self.tape.len() {
+          if self.tape_index > self.tape.len() {
             // Make sure to reserve enough space
             self.tape.reserve(self.tape.len() - self.tape_index);
             // Write out rest of 0 bytes
-            for i in 0..self.tape.len() {
+            for i in 1..self.tape.len() {
               self.tape[i] = 0;
             }
           }
@@ -73,7 +73,7 @@ impl ProgramStack {
         Command::DecrementValue => {
           self.tape[self.tape_index] = self.tape[self.tape_index].wrapping_sub(1);
         }
-        Command::Output => print!("{}", self.tape[self.tape_index]),
+        Command::Output => print!("{}", self.tape[self.tape_index] as char),
         Command::Input => {
           self.tape[self.tape_index] = match self.stdin.lock().bytes().next() {
             Some(b) =>  {
@@ -102,17 +102,12 @@ impl ProgramStack {
       self.inst_index += 1;
     }
   }
-  
-  pub fn show_tape(&self) {
-    println!("{:?}", self.tape);
-  }
 }
 
 fn main() {
   match ProgramStack::from_file(String::from("test.bf")) {
     Ok(mut p) => {
       p.run().unwrap();
-      p.show_tape();
     },
     Err(e) => println!("{}", e),
   };
