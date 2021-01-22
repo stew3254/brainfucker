@@ -43,6 +43,17 @@ impl ProgramStack {
     ProgramStack::from(program)
   }
   
+  fn grow_tape(t: &mut Vec<u8>, i: usize) {
+    if i >= t.len() {
+      // Make sure to reserve enough space
+      t.reserve((i - t.len()) + 2);
+      // Write out rest of 0 bytes
+      for _ in 1..t.len() {
+        t.push(0);
+      }
+    }
+  }
+
   pub fn run(&mut self) -> Result<(), Error> {
     let len = self.program.len();
     loop {
@@ -60,14 +71,7 @@ impl ProgramStack {
           }
         }
         Command::IncrementValue => {
-          if self.tape_index > self.tape.len() {
-            // Make sure to reserve enough space
-            self.tape.reserve(self.tape.len() - self.tape_index);
-            // Write out rest of 0 bytes
-            for i in 1..self.tape.len() {
-              self.tape[i] = 0;
-            }
-          }
+          ProgramStack::grow_tape(&mut self.tape, self.tape_index);
           self.tape[self.tape_index] = self.tape[self.tape_index].wrapping_add(1);
         }
         Command::DecrementValue => {
@@ -86,12 +90,14 @@ impl ProgramStack {
           }
         }
         Command::JumpForward(j) => {
+          ProgramStack::grow_tape(&mut self.tape, self.tape_index);
           if self.tape[self.tape_index] == 0 {
             // Going to increase instruction pointer by 1 more after so this is fine
             self.inst_index = j.pair_index;
           }
         }
         Command::JumpBackward(j) => {
+          ProgramStack::grow_tape(&mut self.tape, self.tape_index);
           if self.tape[self.tape_index] != 0 {
             // Going to increase instruction pointer by 1 more after so this is fine
             self.inst_index = j.pair_index;
@@ -102,12 +108,17 @@ impl ProgramStack {
       self.inst_index += 1;
     }
   }
+  
+  pub fn show_tape(&self) {
+    println!("{:?}", self.tape);
+  }
 }
 
 fn main() {
   match ProgramStack::from_file(String::from("test.bf")) {
     Ok(mut p) => {
       p.run().unwrap();
+      p.show_tape();
     },
     Err(e) => println!("{}", e),
   };
