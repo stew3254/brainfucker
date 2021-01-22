@@ -2,6 +2,8 @@ use anyhow::{anyhow, Error};
 use std::fs;
 use std::io::{stdin, Stdin, Read};
 use crate::parser::Command;
+use std::collections::HashMap;
+use std::ops::Index;
 
 mod parser;
 
@@ -9,7 +11,7 @@ mod parser;
 struct ProgramStack {
   program: Vec<Command>,
   inst_index: usize,
-  tape: Vec<u8>,
+  tape: HashMap<usize, u8>,
   tape_index: usize,
   stdin: Stdin,
 }
@@ -29,7 +31,7 @@ impl ProgramStack {
     Ok(ProgramStack {
       program: p,
       inst_index: 0,
-      tape: vec![0; 32],
+      tape: HashMap::new(),
       tape_index: 0,
       stdin: stdin(),
     })
@@ -43,17 +45,6 @@ impl ProgramStack {
     ProgramStack::from(program)
   }
   
-  fn grow_tape(t: &mut Vec<u8>, i: usize) {
-    if i >= t.len() {
-      // Make sure to reserve enough space
-      t.reserve((i - t.len()) + 2);
-      // Write out rest of 0 bytes
-      for _ in 1..t.len() {
-        t.push(0);
-      }
-    }
-  }
-
   pub fn run(&mut self) -> Result<(), Error> {
     let len = self.program.len();
     loop {
@@ -71,15 +62,45 @@ impl ProgramStack {
           }
         }
         Command::IncrementValue => {
-          ProgramStack::grow_tape(&mut self.tape, self.tape_index);
-          self.tape[self.tape_index] = self.tape[self.tape_index].wrapping_add(1);
+          // Add value into tape if it's not 0 or change it if it's already there
+          match self.tape.get_mut(&self.tape_index) {
+            Some(b) => {b.wrapping_add(1);}
+            None => {self.tape.insert(self.tape_index, 1);}
+          }
         }
         Command::DecrementValue => {
-          self.tape[self.tape_index] = self.tape[self.tape_index].wrapping_sub(1);
+          let mut remove_key = false;
+          // Remove value into tape if it's going to be 0 or change it if it's already there
+          // or add it if it isn't
+          match self.tape.get_mut(&self.tape_index) {
+            Some(b) => {
+              // Remove key since it would go to 0
+              if *b == 1 {
+                remove_key = true;
+              } else {
+                b.wrapping_sub(1);
+              }
+            },
+            None => {self.tape.insert(self.tape_index, 255);}
+          }
+          
+          // Remove 0 value
+          if remove_key {
+            self.tape.remove(&self.inst_index);
+          }
         }
-        Command::Output => print!("{}", self.tape[self.tape_index] as char),
+        Command::Output => {
+          print!(
+            "{}",
+            match self.tape.get(&self.inst_index) {
+              Some(b) => b,
+              None => &0,
+            } as char
+          )
+        }
         Command::Input => {
-          self.tape[self.tape_index] = match self.stdin.lock().bytes().next() {
+          let c = self.tape.get(&self.inst_index);
+          c = match self.stdin.lock().bytes().next() {
             Some(b) =>  {
               match b {
                 Ok(x) => x, 
@@ -90,15 +111,13 @@ impl ProgramStack {
           }
         }
         Command::JumpForward(j) => {
-          ProgramStack::grow_tape(&mut self.tape, self.tape_index);
-          if self.tape[self.tape_index] == 0 {
+          if let None = self.tape.get(&self.tape_index) {
             // Going to increase instruction pointer by 1 more after so this is fine
             self.inst_index = j.pair_index;
           }
         }
         Command::JumpBackward(j) => {
-          ProgramStack::grow_tape(&mut self.tape, self.tape_index);
-          if self.tape[self.tape_index] != 0 {
+          if let Some(_) = self.tape.get(&self.tape_index) {
             // Going to increase instruction pointer by 1 more after so this is fine
             self.inst_index = j.pair_index;
           }
