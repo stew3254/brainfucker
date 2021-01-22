@@ -3,7 +3,6 @@ use std::fs;
 use std::io::{stdin, Stdin, Read};
 use crate::parser::Command;
 use std::collections::HashMap;
-use std::ops::Index;
 
 mod parser;
 
@@ -64,48 +63,45 @@ impl ProgramStack {
         Command::IncrementValue => {
           // Add value into tape if it's not 0 or change it if it's already there
           match self.tape.get_mut(&self.tape_index) {
-            Some(b) => {b.wrapping_add(1);}
+            Some(b) => {*b = b.wrapping_add(1);}
             None => {self.tape.insert(self.tape_index, 1);}
           }
         }
         Command::DecrementValue => {
-          let mut remove_key = false;
           // Remove value into tape if it's going to be 0 or change it if it's already there
           // or add it if it isn't
+          let mut remove_key = false;
           match self.tape.get_mut(&self.tape_index) {
             Some(b) => {
               // Remove key since it would go to 0
               if *b == 1 {
                 remove_key = true;
               } else {
-                b.wrapping_sub(1);
+                *b = b.wrapping_sub(1);
               }
             },
             None => {self.tape.insert(self.tape_index, 255);}
           }
-          
-          // Remove 0 value
           if remove_key {
-            self.tape.remove(&self.inst_index);
+            self.tape.remove(&self.tape_index);
           }
         }
         Command::Output => {
           print!(
             "{}",
-            match self.tape.get(&self.inst_index) {
-              Some(b) => b,
-              None => &0,
+            match self.tape.get(&self.tape_index) {
+              Some(b) => *b,
+              None => 0,
             } as char
           )
         }
         Command::Input => {
-          let c = self.tape.get(&self.inst_index);
-          c = match self.stdin.lock().bytes().next() {
+          match self.stdin.lock().bytes().next() {
             Some(b) =>  {
               match b {
-                Ok(x) => x, 
+                Ok(x) => self.tape.insert(self.tape_index, x),
                 Err(e) => return Err(anyhow!(e)),
-              }
+              };
             }
             None => return Err(anyhow!("No input could be obtained")),
           }
